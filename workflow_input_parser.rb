@@ -2,6 +2,7 @@
 
 require 'json'
 require_relative 'data_pointer'
+require_relative 'primitive_value_parser'
 
 module WorkflowInputParser
   class << self
@@ -14,46 +15,29 @@ module WorkflowInputParser
 
     private
 
-    # @param v [String]
+    # @param v [Object]
     # @return  [Object]
     def infer(v)
+      return v unless v.is_a?(String)
+
       if v =~ /\$\{.+\}/
         unless v =~ /^\$\{(.+)\}$/
-          warn 'The value contains placeholder but the range is not the entire string. Failed to parse.'
+          warn 'Failed to parse. The value contains a placeholder but it does not span the entire string'
           exit 1
         end
 
         v0 = Regexp.last_match(1)
-        parse_as_a_data_pointer(v0) || parse_as_a_raw_value(v0)
+        try_data_pointer(v0) || PrimitiveValueParser.run(v0)
       else
-        parse_as_a_raw_value(v)
+        PrimitiveValueParser.run(v)
       end
     end
 
     # @param v [String]
     # @return  [DataPointer, nil] if it is interpretable as a data pointer, returns DataPointer object
     #                             Otherwise, returns nil
-    def parse_as_a_data_pointer(v)
-      DataPointer.new(Regexp.last_match(1), Regexp.last_match(2)) if v =~ /^(\w+)\.(\w+)$/
-    end
-
-    # @param v [String]
-    # @return  [String, Integer, Float]
-    def parse_as_a_raw_value(v)
-      unless v.is_a?(String)
-        warn "Non-string value is given: #{v}"
-        exit 1
-      end
-
-      begin
-        Integer(v)
-      rescue
-        begin
-          Float(v)
-        rescue
-          v
-        end
-      end
+    def try_data_pointer(v)
+      DataPointer.new(Regexp.last_match(1), Regexp.last_match(2)) if v =~ /^([a-zA-Z_]\w*)\.([a-zA-Z_]\w*)$/
     end
   end
 end
