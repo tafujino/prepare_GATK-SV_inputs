@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module PrimitiveValueParser
+module StringInference
   class << self
     # @param v [String]
     # @return  [String, Integer, Float, Boolean, Array]
@@ -10,19 +10,8 @@ module PrimitiveValueParser
         exit 1
       end
 
-      ret = try_array(v)
-      return ret unless ret.nil?
-
-      ret = try_integer(v)
-      return ret unless ret.nil?
-
-      ret = try_float(v)
-      return ret unless ret.nil?
-
-      # The following is invalid because try_boolean may return `false`
-      # try_boolean(v) || v
-      ret = try_boolean(v)
-      return ret unless ret.nil?
+      ret = try_array(v) || try_primitive_value(v)
+      return ret unless ret.nil? # just `if ret` is a not valid since ret may be `false`
 
       v
     end
@@ -63,18 +52,19 @@ module PrimitiveValueParser
       Regexp.last_match(1).split(',').map do |e|
         next Regexp.last_match(1) if e =~ /"(.*)"/
 
-        ret = try_integer(v)
-        next ret unless ret.nil?
-
-        ret = try_float(v)
-        next ret unless ret.nil?
-
-        ret = try_boolean(v)
-        next ret unless ret.nil?
+        ret = try_primitive_value(e)
+        next ret unless ret.nil? # just `if ret` is a not valid since ret may be `false`
 
         warn "Failed to parse: #{e}"
         exit 1
       end
+    end
+
+    # @param v [String]
+    # @param   [Object, nil] Be careful to the return value!!
+    #                        `nil` means inference failure and `false` means just boolean `false` value
+    def try_primitive_value(v)
+      try_integer(v) || try_float(v) || try_boolean(v)
     end
   end
 end

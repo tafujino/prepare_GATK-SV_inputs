@@ -2,7 +2,7 @@
 
 require 'json'
 require_relative 'data_pointer'
-require_relative 'primitive_value_parser'
+require_relative 'string_inference'
 
 module WorkflowInputParser
   class << self
@@ -27,9 +27,9 @@ module WorkflowInputParser
         end
 
         v0 = Regexp.last_match(1)
-        try_data_pointer(v0) || PrimitiveValueParser.run(v0)
+        try_data_pointer(v0) ||StringInference.run(v0)
       else
-        PrimitiveValueParser.run(v)
+        StringInference.run(v)
       end
     end
 

@@ -2,7 +2,7 @@
 
 require 'csv'
 require_relative 'data_pointer'
-require_relative 'primitive_value_parser'
+require_relative 'string_inference'
 
 module TableParser
   class << self
@@ -12,7 +12,7 @@ module TableParser
       row = CSV.read(tsv_path, headers: true, col_sep: "\t", quote_char: "\x00").first.to_a
       remove_table_prefix_from_key!(row)
       kvs = row.to_h
-      kvs.transform_values { |v| PrimitiveValueParser.run(v) }
+      kvs.transform_values { |v| StringInference.run(v) }
     end
 
     private
