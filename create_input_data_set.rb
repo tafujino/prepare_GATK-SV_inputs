@@ -49,7 +49,7 @@ input.compact!
 
 copy_table.each do |src_dir_uri, dst_dir|
   warn "Downloading #{src_dir_uri}"
-  Open3.popen3("gsutil cp -r #{src_dir_uri} #{dst_dir.dirname}") do |_, o, e, _|
+  Open3.popen3("gsutil -m cp -r #{src_dir_uri} #{dst_dir.dirname}") do |_, o, e, _|
     o.each { |line| warn line }
     e.each { |line| warn line }
   end
