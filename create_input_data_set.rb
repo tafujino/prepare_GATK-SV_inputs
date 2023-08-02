@@ -45,5 +45,6 @@ input.transform_values! do |v|
   end
   dst_path.to_s
 end
+input.compact!
 
 puts JSON.generate(input)
