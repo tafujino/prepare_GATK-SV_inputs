@@ -2,7 +2,6 @@
 
 require 'pathname'
 require 'fileutils'
-require 'open3'
 require_relative 'workflow_input_parser'
 require_relative 'table_parser'
 
@@ -49,10 +48,7 @@ input.compact!
 
 copy_table.each do |src_dir_uri, dst_dir|
   warn "Downloading #{src_dir_uri}"
-  Open3.popen3("gsutil -m cp -r #{src_dir_uri} #{dst_dir.dirname}") do |_, o, e, _|
-    o.each { |line| warn line }
-    e.each { |line| warn line }
-  end
+  system("gsutil -q -m cp -r #{src_dir_uri} #{dst_dir.dirname}") 
 end
 
 puts JSON.generate(input)
