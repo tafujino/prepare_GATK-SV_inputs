@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'optparse'
 require 'pathname'
 require 'fileutils'
 require 'yaml'
@@ -28,6 +29,11 @@ def rewrite_gcnv_model_tars_list(params, path_mappings)
     end
   end
 end
+
+opt = OptionParser.new
+no_clobber = false
+opt.on('-n') {|v| no_clobber = true }
+opt.parse!(ARGV)
 
 config_path = Pathname.new(ARGV.shift)
 base_dir = Pathname.new(ARGV.shift)
@@ -77,9 +83,20 @@ params.transform_values! do |v|
 end
 params.compact!
 
+no_clobber_opt = no_clobber ? '-n' : nil
 path_mappings.each do |src_dir_uri, dst_dir|
   warn "Downloading #{src_dir_uri}"
-  system("gsutil -q -m cp -r #{src_dir_uri} #{dst_dir.dirname}")
+  download_cmd = [
+    'gsutil',
+    '-q',
+    '-m',
+    'cp',
+    '-r'
+    no_clobber_opt,
+    src_dir_uri,
+    dst_dir.dirname
+  ].join(' ')
+  system download_cmd
 end
 
 rewrite_gcnv_model_tars_list(params, path_mappings)
