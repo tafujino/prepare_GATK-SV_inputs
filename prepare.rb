@@ -8,11 +8,11 @@ require_relative 'workflow_input_parser'
 require_relative 'table_parser'
 
 # @param src_primary_uri        [String]
-# @param dst_dir                [Pathname]
+# @param data_dir               [Pathname]
 # @param inspect_secondary_file [Boolean]
 # @param no_clobber             [Boolean]
 # @return                       [Pathname] path of the destination primary file
-def download_gcp_file(src_primary_uri, dst_dir, inspect_secondary_file: false, no_clobber: false)
+def download_gcp_file(src_primary_uri, data_dir, inspect_secondary_file: false, no_clobber: false)
   src_uris = [src_primary_uri]
   if inspect_secondary_file
     case src_primary_uri
@@ -30,7 +30,7 @@ def download_gcp_file(src_primary_uri, dst_dir, inspect_secondary_file: false, n
   end
   path_mappings = src_uris.map do |src_uri|
     src_uri =~ %r{^gs://(.+)$}
-    dst_path = dst_dir / Regexp.last_match(1)
+    dst_path = data_dir / Regexp.last_match(1)
     FileUtils.mkpath dst_path.dirname
     unless no_clobber && dst_path.exist?
       warn "Downloading #{src_uri}"
@@ -42,7 +42,7 @@ def download_gcp_file(src_primary_uri, dst_dir, inspect_secondary_file: false, n
         '-r',
         no_clobber ? '-n' : nil,
         src_uri,
-        dst_dir
+        dst_path.dirname
       ].compact.join(' ')
       system download_cmd
     end
