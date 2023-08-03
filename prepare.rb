@@ -7,32 +7,64 @@ require 'yaml'
 require_relative 'workflow_input_parser'
 require_relative 'table_parser'
 
-# @param params        [Hash{ String => Object }]
-# @param path_mappings [Hash{ String => Pathname }]
-def rewrite_gcnv_model_tars_list(params, path_mappings)
-  key = 'GATKSVPipelineSingleSample.gcnv_model_tars_list'
-  gcnv_model_tars_list_path = params[key]
-  gcnv_model_tars_list = File.readlines(gcnv_model_tars_list_path, chomp: true)
-  gcnv_model_tars_list.each do |tar_uri|
-    is_success = false
-    path_mappings.each do |src_dir_uri, dst_dir|
-      uri_prefix_regexp = Regexp.compile("^#{Regexp.escape(src_dir_uri)}")
-      next unless tar_uri =~ uri_prefix_regexp
+# @param src_primary_uri        [String]
+# @param dst_dir                [Pathname]
+# @param inspect_secondary_file [Boolean]
+# @param no_clobber             [Boolean]
+# @return                       [Pathname] path of the destination primary file
+def download_gcp_file(src_primary_uri, dst_dir, inspect_secondary_file: false, no_clobber: false)
+  FileUtils.mkpath dst_dir
+  src_uris = [src_primary_uri]
+  if inspect_secondary_file
+    case src_primary_uri
+    when /\.bed\.gz$/, /\.vcf\.gz$/
+      src_uris << "#{src_primary_uri}.tbi"
+    when /\.bed$/, /\.vcf$/
+      src_uris << "#{src_primary_uri}.tbi"
+    when /\.fa$/, /\.fasta$/
+      src_uris << "#{src_primary_uri}.fai"
+    when /\.bam$/
+      src_uris << "#{src_primary_uri}.bai"
+    when /\.cram$/
+      src_uris << "#{src_primary_uri}.crai"
+    end
+  end
+  src_uris.each do |src_uri|
+    warn "Downloading #{src_uri}"
+    download_cmd = [
+      'gsutil',
+      '-q',
+      '-m',
+      'cp',
+      '-r',
+      no_clobber ? '-n' : nil,
+      src_uri,
+      dst_dir
+    ].join(' ')
+    warn download_cmd
+  end
+  src_primary_uri =~ %r{^gs://(.+)$}
+  dst_dir / Regexp.last_match(1)
+end
 
-      is_success = true
-      tar_uri.gsub!(uri_prefix_regexp, dst_dir.to_s)
-      break
-    end
-    unless is_success
-      warn "Cannot find URI rewrite rule for #{tar_uri}"
-      exit 1
-    end
+# @param params     [Hash{ String => Object }]
+# @param data_dir   [Pathname]
+# @param key        [String]
+# @param no_clobber [Boolean]
+def rewrite_file_list(params, data_dir, key, no_clobber: false)
+  file_list_path = params[key]
+  file_list = File.readlines(file_list_path, chomp: true)
+  file_list.map! do |src_uri|
+    download_gcp_file(src_uri, data_dir, no_clobber:)
+  end
+  File.open(file_list_path, 'w') do |f|
+    file_list.each { |path| f.puts path }
   end
 end
 
 opt = OptionParser.new
 no_clobber = false
-opt.on('-n') {|v| no_clobber = true }
+opt.on('-n') { no_clobber = true }
 opt.parse!(ARGV)
 
 config_path = Pathname.new(ARGV.shift)
@@ -47,6 +79,7 @@ out_path = Pathname.new(config['wdl_params'])
 out_path = base_dir / out_path if out_path.relative?
 
 base_dir = Pathname.new(base_dir).expand_path
+data_dir = base_dir / 'data'
 params = WorkflowInputParser.run(workflow_inputs_json_path)
 workspace_data = TableParser.run(workspace_data_tsv_path)
 sample = { 'sample_id' => sample_name,
@@ -59,46 +92,35 @@ params.transform_values! do |v|
 
   case v.table_name
   when 'workspace'
-    download_dir = base_dir / 'workspace_data'
     v0 = workspace_data[v.key]
+    next v0 unless v0.is_a?(String)
+    next v0 unless v0 =~ %r{^gs://(.+)$}
+
+    src_path = Regexp.last_match(1)
+    src_uri = v0
+    dst_path = data_dir / src_path
+    path_mappings[src_uri] = dst_path.dirname
+    dst_path
   when 'this'
-    download_dir = base_dir / sample_name
-    v0 = sample[v.key]
+    sample[v.key]
   else
     warn "Invalid table: #{v.table_name}"
     exit 1
   end
-
-  next v0 unless v0.is_a?(String)
-  next v0 unless v0 =~ %r{^gs://(.+)$}
-
-  src_path = Pathname.new(Regexp.last_match(1))
-  src_dir = src_path.dirname
-  dst_path = download_dir / src_path
-  dst_dir = dst_path.dirname
-  FileUtils.mkpath(dst_dir)
-  path_mappings["gs://#{src_dir}"] = dst_dir
-
-  dst_path.to_s
 end
 params.compact!
 
-no_clobber_opt = no_clobber ? '-n' : nil
-path_mappings.each do |src_dir_uri, dst_dir|
-  warn "Downloading #{src_dir_uri}"
-  download_cmd = [
-    'gsutil',
-    '-q',
-    '-m',
-    'cp',
-    '-r'
-    no_clobber_opt,
-    src_dir_uri,
-    dst_dir.dirname
-  ].join(' ')
-  system download_cmd
+path_mappings.each do |src_uri, dst_dir|
+  download_gcp_file(src_uri, dst_dir, inspect_secondary_file: true, no_clobber:)
 end
 
-rewrite_gcnv_model_tars_list(params, path_mappings)
+%w[
+  gcnv_model_tars_list
+  ref_pesr_disc_files_list
+  ref_pesr_sd_files_list
+  ref_pesr_split_files_list
+].each do |key|
+  rewrite_file_list(params, path_mappings, "GATKSVPipelineSingleSample.#{key}", no_clobber:)
+end
 
 File.write(out_path, JSON.generate(params))
