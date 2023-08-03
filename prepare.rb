@@ -13,7 +13,6 @@ require_relative 'table_parser'
 # @param no_clobber             [Boolean]
 # @return                       [Pathname] path of the destination primary file
 def download_gcp_file(src_primary_uri, dst_dir, inspect_secondary_file: false, no_clobber: false)
-  FileUtils.mkpath dst_dir
   src_uris = [src_primary_uri]
   if inspect_secondary_file
     case src_primary_uri
@@ -32,6 +31,7 @@ def download_gcp_file(src_primary_uri, dst_dir, inspect_secondary_file: false, n
   path_mappings = src_uris.map do |src_uri|
     src_uri =~ %r{^gs://(.+)$}
     dst_path = dst_dir / Regexp.last_match(1)
+    FileUtils.mkpath dst_path.dirname
     unless no_clobber && dst_path.exist?
       warn "Downloading #{src_uri}"
       download_cmd = [
@@ -90,7 +90,7 @@ sample = { 'sample_id' => sample_name,
            'bam_or_cram_file' => sample_cram_path,
            'requester_pays_cram' => false }
 
-path_mappings = {}
+src_uris = []
 params.transform_values! do |v|
   next v unless v.is_a?(DataPointer)
 
@@ -101,9 +101,9 @@ params.transform_values! do |v|
     next v0 unless v0 =~ %r{^gs://(.+)$}
 
     src_path = Regexp.last_match(1)
-    src_uri = v0
     dst_path = data_dir / src_path
-    path_mappings[src_uri] = dst_path.dirname
+    src_uri = v0
+    src_uris << src_uri
     dst_path
   when 'this'
     sample[v.key]
@@ -114,8 +114,8 @@ params.transform_values! do |v|
 end
 params.compact!
 
-path_mappings.each do |src_uri, dst_dir|
-  download_gcp_file(src_uri, dst_dir, inspect_secondary_file: true, no_clobber:)
+src_uris.each do |src_uri|
+  download_gcp_file(src_uri, data_dir, inspect_secondary_file: true, no_clobber:)
 end
 
 %w[
