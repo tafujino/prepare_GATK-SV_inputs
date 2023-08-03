@@ -79,7 +79,7 @@ params.compact!
 
 path_mappings.each do |src_dir_uri, dst_dir|
   warn "Downloading #{src_dir_uri}"
-  warn("gsutil -q -m cp -r #{src_dir_uri} #{dst_dir.dirname}")
+  system("gsutil -q -m cp -r #{src_dir_uri} #{dst_dir.dirname}")
 end
 
 rewrite_gcnv_model_tars_list(params, path_mappings)
