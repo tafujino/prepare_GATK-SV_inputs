@@ -19,7 +19,7 @@ def download_gcp_file(src_primary_uri, data_dir, inspect_secondary_file: false, 
     when /\.bed\.gz$/, /\.vcf\.gz$/
       src_uris << "#{src_primary_uri}.tbi"
     when /\.bed$/, /\.vcf$/
-      src_uris << "#{src_primary_uri}.tbi"
+      src_uris << "#{src_primary_uri}.idx"
     when /\.fa$/, /\.fasta$/
       src_uris << "#{src_primary_uri}.fai"
     when /\.bam$/
