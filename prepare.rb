@@ -29,22 +29,26 @@ def download_gcp_file(src_primary_uri, dst_dir, inspect_secondary_file: false, n
       src_uris << "#{src_primary_uri}.crai"
     end
   end
-  src_uris.each do |src_uri|
-    warn "Downloading #{src_uri}"
-    download_cmd = [
-      'gsutil',
-      '-q',
-      '-m',
-      'cp',
-      '-r',
-      no_clobber ? '-n' : nil,
-      src_uri,
-      dst_dir
-    ].compact.join(' ')
-    system download_cmd
+  path_mappings = src_uris.map do |src_uri|
+    src_uri =~ %r{^gs://(.+)$}
+    dst_path = dst_dir / Regexp.last_match(1)
+    unless no_clobber && dst_path.exist?
+      warn "Downloading #{src_uri}"
+      download_cmd = [
+        'gsutil',
+        '-q',
+        '-m',
+        'cp',
+        '-r',
+        no_clobber ? '-n' : nil,
+        src_uri,
+        dst_dir
+      ].compact.join(' ')
+      system download_cmd
+    end
+    dst_path
   end
-  src_primary_uri =~ %r{^gs://(.+)$}
-  dst_dir / Regexp.last_match(1)
+  path_mappings.first
 end
 
 # @param params     [Hash{ String => Object }]
@@ -120,7 +124,7 @@ end
   ref_pesr_sd_files_list
   ref_pesr_split_files_list
 ].each do |key|
-  rewrite_file_list(params, path_mappings, "GATKSVPipelineSingleSample.#{key}", no_clobber:)
+  rewrite_file_list(params, data_dir, "GATKSVPipelineSingleSample.#{key}", no_clobber:)
 end
 
 File.write(out_path, JSON.generate(params))
