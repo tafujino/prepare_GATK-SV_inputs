@@ -41,7 +41,7 @@ def download_gcp_file(src_primary_uri, dst_dir, inspect_secondary_file: false, n
       src_uri,
       dst_dir
     ].join(' ')
-    warn download_cmd
+    system download_cmd
   end
   src_primary_uri =~ %r{^gs://(.+)$}
   dst_dir / Regexp.last_match(1)
