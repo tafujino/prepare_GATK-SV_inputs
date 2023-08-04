@@ -59,6 +59,8 @@ def rewrite_file_list(params, data_dir, key, no_clobber: false)
   file_list_path = params[key]
   file_list = File.readlines(file_list_path, chomp: true)
   file_list.map! do |src_uri|
+    next src_uri unless src_uri =~ %r{^gs://(.+)$}
+
     download_gcp_file(src_uri, data_dir, inspect_secondary_file: true, no_clobber:)
   end
   File.open(file_list_path, 'w') do |f|
