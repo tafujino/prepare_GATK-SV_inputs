@@ -11,8 +11,6 @@ INPUT_PARAM_FILES = {
   'reference_resources' => 'resources_hg38.json'
 }.freeze
 
-NAMESPACE_BLACKLIST = %w[this].freeze # variables in these namespaces are not resolved
-
 # @param version [String, nil]
 # @return [String]
 def clone_repo_and_switch(version)
@@ -47,8 +45,6 @@ end
 def substitute_variable(str, dict)
   if str =~ /^([^.\s]+)\.([^.\s]+)$/
     namespace = Regexp.last_match(1)
-    return str if NAMESPACE_BLACKLIST.include?(namespace)
-
     varname = Regexp.last_match(2)
     unless dict.key?(namespace)
       warn "Failed to find namespace '#{namespace}'"
