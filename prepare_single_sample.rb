@@ -124,9 +124,8 @@ def download_gcp_file(src_primary_uri, data_dir, inspect_secondary_file: false, 
     unless no_clobber && dst_path.exist?
       warn "Downloading #{src_uri}"
       download_cmd = [
-        'gsutil',
-        '-q',
-        '-m',
+        'gcloud',
+        'storage',
         'cp',
         '-r',
         no_clobber ? '-n' : nil,
@@ -161,7 +160,7 @@ opt = OptionParser.new
 no_clobber = false
 opt.on('-n') { no_clobber = true }
 opt.parse!(ARGV)
-data_dir = Pathname.new(ARGV.shift)
+data_dir = Pathname.new(ARGV.shift || '.')
 version = ARGV.shift
 
 repo_name = clone_repo_and_switch(version)
@@ -184,6 +183,7 @@ inputs = inputs.map.to_h do |k, v|
   v = eval_one_wdl_placeholder(v, input_params) if v.is_a?(String)
   [k, v]
 end
+inputs.compact!
 
 inputs.transform_values! do |v|
   if v.is_a?(String) && v =~ %r{^gs://}
@@ -193,13 +193,13 @@ inputs.transform_values! do |v|
   end
 end
 
-pp inputs
-
 %w[
   gcnv_model_tars_list
-  ref_pesr_disc_Files_list
+  ref_pesr_disc_files_list
   ref_pesr_sd_files_list
   ref_pesr_split_files_list
 ].each do |key|
   rewrite_file_list(inputs, data_dir, "GATKSVPipelineSingleSample.#{key}", no_clobber: no_clobber)
 end
+
+File.write('inputs.template.json', JSON.pretty_generate(inputs))
