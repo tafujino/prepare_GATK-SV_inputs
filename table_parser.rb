@@ -9,21 +9,18 @@ module TableParser
     # @param tsv_path [String]
     # @return         [Hash{ String => Object }]
     def run(tsv_path)
-      row = CSV.read(tsv_path, headers: true, col_sep: "\t", quote_char: "\x00").first.to_a
-      remove_table_prefix_from_key!(row)
-      kvs = row.to_h
-      kvs.transform_values { |v| StringInference.run(v) }
+      rows = CSV.read(tsv_path, col_sep: "\t")
+      remove_table_prefix_from_key!(rows).to_h
     end
 
     private
 
     # The first key contains a prefix /^\w+:/ and this function removes it
     # @param row [Array<Array<String>>] Array of key-value
-    def remove_table_prefix_from_key!(row)
-      first_kv = row.shift
-      k, v = first_kv
-      k = k.sub(/^\w+:(\w+)$/, '\1')
-      row.unshift([k, v])
+    def remove_table_prefix_from_key!(rows)
+      k, v = rows.shift
+      k.gsub!(/^\w+:(\w+)$/, '\1')
+      rows.unshift([k, v])
     end
   end
 end

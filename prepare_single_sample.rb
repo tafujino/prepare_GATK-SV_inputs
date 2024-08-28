@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 require 'json'
+require 'optparse'
+require 'pathname'
 require_relative 'table_parser'
-
-version = ARGV.shift
 
 INPUT_PARAM_FILES = {
   'dockers' => 'dockers.json',
@@ -13,7 +13,7 @@ INPUT_PARAM_FILES = {
 
 # @param version [String, nil]
 # @return [String]
-def clone_repo_and_switch(version)
+def clone_repo_and_switch(version = nil)
   repo_name = "gatk-sv-#{version || 'latest'}-local"
 
   if File.exist?(repo_name)
@@ -96,6 +96,74 @@ def build_workspace_table(path, dict)
   rows.to_h
 end
 
+# @param src_primary_uri        [String]
+# @param data_dir               [Pathname]
+# @param inspect_secondary_file [Boolean]
+# @param no_clobber             [Boolean]
+# @return                       [Pathname] path of the destination primary file
+def download_gcp_file(src_primary_uri, data_dir, inspect_secondary_file: false, no_clobber: false)
+  src_uris = [src_primary_uri]
+  if inspect_secondary_file
+    case src_primary_uri
+    when /\.bed\.gz$/, /\.vcf\.gz$/
+      src_uris << "#{src_primary_uri}.tbi"
+    when /\.bed$/, /\.vcf$/
+      src_uris << "#{src_primary_uri}.idx"
+    when /\.fa$/, /\.fa\.gz$/, /\.fasta$/, /\.fasta\.gz$/
+      src_uris << "#{src_primary_uri}.fai"
+    when /\.bam$/
+      src_uris << "#{src_primary_uri}.bai"
+    when /\.cram$/
+      src_uris << "#{src_primary_uri}.crai"
+    end
+  end
+  path_mappings = src_uris.map do |src_uri|
+    src_uri =~ %r{^gs://(.+)$}
+    dst_path = data_dir / Regexp.last_match(1)
+    FileUtils.mkpath dst_path.dirname
+    unless no_clobber && dst_path.exist?
+      warn "Downloading #{src_uri}"
+      download_cmd = [
+        'gsutil',
+        '-q',
+        '-m',
+        'cp',
+        '-r',
+        no_clobber ? '-n' : nil,
+        src_uri,
+        dst_path.dirname
+      ].compact.join(' ')
+      system download_cmd
+    end
+    dst_path
+  end
+  path_mappings.first
+end
+
+# @param params     [Hash{ String => Object }]
+# @param data_dir   [Pathname]
+# @param key        [String]
+# @param no_clobber [Boolean]
+def rewrite_file_list(params, data_dir, key, no_clobber: false)
+  file_list_path = params[key]
+  file_list = File.readlines(file_list_path, chomp: true)
+  file_list.map! do |path|
+    next path unless path =~ %r{^gs://}
+
+    download_gcp_file(path, data_dir, inspect_secondary_file: true, no_clobber: no_clobber)
+  end
+  File.open(file_list_path, 'w') do |f|
+    file_list.each { |path| f.puts path }
+  end
+end
+
+opt = OptionParser.new
+no_clobber = false
+opt.on('-n') { no_clobber = true }
+opt.parse!(ARGV)
+data_dir = Pathname.new(ARGV.shift)
+version = ARGV.shift
+
 repo_name = clone_repo_and_switch(version)
 
 input_params = INPUT_PARAM_FILES.transform_values do |filename|
@@ -117,4 +185,21 @@ inputs = inputs.map.to_h do |k, v|
   [k, v]
 end
 
+inputs.transform_values! do |v|
+  if v.is_a?(String) && v =~ %r{^gs://}
+    download_gcp_file(v, data_dir, inspect_secondary_file: true, no_clobber: no_clobber)
+  else
+    v
+  end
+end
+
 pp inputs
+
+%w[
+  gcnv_model_tars_list
+  ref_pesr_disc_Files_list
+  ref_pesr_sd_files_list
+  ref_pesr_split_files_list
+].each do |key|
+  rewrite_file_list(inputs, data_dir, "GATKSVPipelineSingleSample.#{key}", no_clobber: no_clobber)
+end

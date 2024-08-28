@@ -122,7 +122,7 @@ end
 
 %w[
   gcnv_model_tars_list
-  ref_pesr_disc_files_list
+  ref_pesr_disc_Files_list
   ref_pesr_sd_files_list
   ref_pesr_split_files_list
 ].each do |key|
