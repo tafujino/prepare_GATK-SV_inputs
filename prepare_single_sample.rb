@@ -3,7 +3,6 @@
 require 'json'
 require 'optparse'
 require 'pathname'
-require_relative 'table_parser'
 
 INPUT_PARAM_FILES = {
   'dockers' => 'dockers.json',
